@@ -14,13 +14,6 @@ A Python script to compile Frigate surveillance recordings into a single MP4 fil
 sudo apt-get install ffmpeg
 ```
 
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Other systems:** Visit [ffmpeg.org](https://ffmpeg.org/download.html)
-
 ## Installation
 
 No additional Python dependencies needed - only uses standard library!
