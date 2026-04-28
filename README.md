@@ -32,13 +32,14 @@ python compile_frigate_recording.py \
 ## Parameters
 
 - `--date` (required): Recording date in YYYY-MM-DD format
-- `--start` (required): Start time in HH:MM format (24-hour)
-- `--end` (required): End time in HH:MM format (24-hour)
+- `--start` (required): Start time in HH:MM format (24-hour, in your system timezone)
+- `--end` (required): End time in HH:MM format (24-hour, in your system timezone)
 - `--camera` (required): Camera name (folder name in your Frigate installation)
 - `--output` (required): Output MP4 filename
 - `--frigate-path` (optional): Path to Frigate storage (default: `/mnt/frigate`)
 - `--reencode` (optional): Re-encode video (slower but handles some codec issues)
-- `--timezone-offset` (optional): Hours to add to convert from your timezone to Frigate's timezone (default: 0). Use 2 if Frigate is 2 hours ahead of your local time.
+- `--timezone-offset` (optional): Hours to add to convert from system timezone to Frigate's timezone. If not specified, calculated automatically assuming Frigate is in UTC.
+- `--frigate-timezone` (optional): Frigate's timezone (default: UTC). Currently only 'UTC' is supported for automatic offset calculation.
 
 ## Examples
 
@@ -110,6 +111,19 @@ python compile_frigate_recording.py \
   --output bryggers_clip.mp4 \
   --timezone-offset 2
 ```
+
+### Automatic timezone handling (assumes Frigate is in UTC)
+
+```bash
+python compile_frigate_recording.py \
+  --date 2026-04-28 \
+  --start 17:50 \
+  --end 18:10 \
+  --camera "Bryggers" \
+  --output bryggers_clip.mp4
+```
+
+*Note: Automatic timezone handling assumes Frigate recordings are stored in UTC. If your Frigate installation uses a different timezone, use the `--timezone-offset` parameter manually.*
 
 ## How It Works
 

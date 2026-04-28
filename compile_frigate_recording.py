@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 
 
 def parse_time(time_str):
@@ -47,9 +48,36 @@ def get_file_key(filename):
     return None
 
 
-def get_file_timestamp(hour, minute, second):
-    """Get absolute minute count for a file timestamp within a day."""
-    return hour * 60 + minute + second / 60.0
+def get_system_timezone_offset():
+    """Get the system's timezone offset from UTC in hours."""
+    if time.daylight:
+        # Daylight saving time is in effect
+        return -time.altzone / 3600
+    else:
+        return -time.timezone / 3600
+
+
+def calculate_timezone_offset(frigate_timezone='UTC'):
+    """
+    Calculate the offset needed to convert from system timezone to Frigate timezone.
+    
+    Args:
+        frigate_timezone: Frigate's timezone ('UTC' or timezone name like 'Europe/Copenhagen')
+    
+    Returns:
+        Hours to add to system time to get Frigate time
+    """
+    system_offset = get_system_timezone_offset()
+    
+    if frigate_timezone.upper() == 'UTC':
+        frigate_offset = 0
+    else:
+        # For now, only support UTC. Could extend to support named timezones
+        raise ValueError(f"Unsupported Frigate timezone: {frigate_timezone}. Currently only 'UTC' is supported.")
+    
+    # Offset needed: frigate_time = system_time + offset
+    # So offset = frigate_offset - system_offset
+    return frigate_offset - system_offset
 
 
 def find_recording_files(base_path, date, start_time, end_time, camera, timezone_offset_hours=0):
@@ -130,20 +158,21 @@ def create_concat_file(files, concat_file):
             f.write(f"file '{abs_path}'\n")
 
 
-def compile_recordings(base_path, date, start_time, end_time, camera, output_file, copy_codec=True, timezone_offset_hours=0):
+def compile_recordings(base_path, date, start_time, end_time, camera, output_file, copy_codec=True, timezone_offset_hours=None, frigate_timezone='UTC'):
     """
     Compile Frigate recordings into a single MP4 file.
     
     Args:
         base_path: Path to Frigate storage (/mnt/frigate)
         date: Date in YYYY-MM-DD format
-        start_time: Start time in HH:MM format (in your local timezone)
-        end_time: End time in HH:MM format (in your local timezone)
+        start_time: Start time in HH:MM format (in your local system timezone)
+        end_time: End time in HH:MM format (in your local system timezone)
         camera: Camera name (folder name in Frigate)
         output_file: Output MP4 filename
         copy_codec: If True, copy without re-encoding (faster). If False, re-encode.
-        timezone_offset_hours: Hours to add to convert from your timezone to Frigate's timezone.
-                              If Frigate is 2 hours ahead, use 2.
+        timezone_offset_hours: Hours to add to convert from system timezone to Frigate's timezone.
+                              If None, calculated automatically assuming Frigate is in UTC.
+        frigate_timezone: Frigate's timezone (default: 'UTC')
     """
     base_path = Path(base_path)
     recordings_path = base_path / "recordings"
@@ -151,12 +180,15 @@ def compile_recordings(base_path, date, start_time, end_time, camera, output_fil
     if not recordings_path.exists():
         raise FileNotFoundError(f"Recordings directory not found: {recordings_path}")
     
+    # Calculate timezone offset if not provided
+    if timezone_offset_hours is None:
+        timezone_offset_hours = calculate_timezone_offset(frigate_timezone)
+    
     print(f"Searching for recordings...")
     print(f"  Date: {date}")
     print(f"  Camera: {camera}")
-    print(f"  Time: {start_time} - {end_time} (input timezone)")
-    if timezone_offset_hours != 0:
-        print(f"  Timezone offset: +{timezone_offset_hours} hours")
+    print(f"  Time: {start_time} - {end_time} (system timezone)")
+    print(f"  Timezone offset: {timezone_offset_hours:+.1f} hours (to {frigate_timezone})")
     
     # Find all relevant files
     files = find_recording_files(recordings_path, date, start_time, end_time, camera, timezone_offset_hours)
@@ -274,8 +306,12 @@ Examples:
     parser.add_argument(
         "--timezone-offset",
         type=int,
-        default=0,
-        help="Hours to add to convert from input timezone to Frigate's timezone (default: 0). Use 2 if Frigate is 2 hours ahead."
+        help="Hours to add to convert from system timezone to Frigate's timezone. If not specified, calculated automatically assuming Frigate is in UTC."
+    )
+    parser.add_argument(
+        "--frigate-timezone",
+        default="UTC",
+        help="Frigate's timezone (default: UTC). Currently only 'UTC' is supported for automatic offset calculation."
     )
     
     args = parser.parse_args()
@@ -289,7 +325,8 @@ Examples:
             args.camera,
             args.output,
             copy_codec=not args.reencode,
-            timezone_offset_hours=args.timezone_offset
+            timezone_offset_hours=args.timezone_offset,
+            frigate_timezone=args.frigate_timezone
         )
     except Exception as e:
         print(f"Error: {e}", file=__import__("sys").stderr)
