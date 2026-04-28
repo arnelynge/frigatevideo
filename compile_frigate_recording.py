@@ -52,15 +52,27 @@ def get_file_timestamp(hour, minute, second):
     return hour * 60 + minute + second / 60.0
 
 
-def find_recording_files(base_path, date, start_time, end_time, camera):
+def find_recording_files(base_path, date, start_time, end_time, camera, timezone_offset_hours=0):
     """
     Find all recording files within the specified time range.
+    
+    Args:
+        timezone_offset_hours: Hours to add to input times to match Frigate's timezone.
+                              Use 2 if Frigate is 2 hours ahead of your input timezone.
     
     Returns a list of absolute paths to MP4 files sorted by time.
     """
     date_obj = parse_date(date)
     start_time_obj = parse_time(start_time)
     end_time_obj = parse_time(end_time)
+    
+    # Apply timezone offset
+    start_dt = datetime.combine(date_obj, start_time_obj) + timedelta(hours=timezone_offset_hours)
+    end_dt = datetime.combine(date_obj, end_time_obj) + timedelta(hours=timezone_offset_hours)
+    
+    date_obj = start_dt.date()
+    start_time_obj = start_dt.time()
+    end_time_obj = end_dt.time()
     
     recording_files = []
     
@@ -118,18 +130,20 @@ def create_concat_file(files, concat_file):
             f.write(f"file '{abs_path}'\n")
 
 
-def compile_recordings(base_path, date, start_time, end_time, camera, output_file, copy_codec=True):
+def compile_recordings(base_path, date, start_time, end_time, camera, output_file, copy_codec=True, timezone_offset_hours=0):
     """
     Compile Frigate recordings into a single MP4 file.
     
     Args:
         base_path: Path to Frigate storage (/mnt/frigate)
         date: Date in YYYY-MM-DD format
-        start_time: Start time in HH:MM format
-        end_time: End time in HH:MM format
+        start_time: Start time in HH:MM format (in your local timezone)
+        end_time: End time in HH:MM format (in your local timezone)
         camera: Camera name (folder name in Frigate)
         output_file: Output MP4 filename
         copy_codec: If True, copy without re-encoding (faster). If False, re-encode.
+        timezone_offset_hours: Hours to add to convert from your timezone to Frigate's timezone.
+                              If Frigate is 2 hours ahead, use 2.
     """
     base_path = Path(base_path)
     recordings_path = base_path / "recordings"
@@ -140,10 +154,12 @@ def compile_recordings(base_path, date, start_time, end_time, camera, output_fil
     print(f"Searching for recordings...")
     print(f"  Date: {date}")
     print(f"  Camera: {camera}")
-    print(f"  Time: {start_time} - {end_time}")
+    print(f"  Time: {start_time} - {end_time} (input timezone)")
+    if timezone_offset_hours != 0:
+        print(f"  Timezone offset: +{timezone_offset_hours} hours")
     
     # Find all relevant files
-    files = find_recording_files(recordings_path, date, start_time, end_time, camera)
+    files = find_recording_files(recordings_path, date, start_time, end_time, camera, timezone_offset_hours)
     
     if not files:
         raise ValueError("No recording files found for the specified parameters.")
@@ -255,6 +271,12 @@ Examples:
         action="store_true",
         help="Re-encode video (slower but handles some edge cases)"
     )
+    parser.add_argument(
+        "--timezone-offset",
+        type=int,
+        default=0,
+        help="Hours to add to convert from input timezone to Frigate's timezone (default: 0). Use 2 if Frigate is 2 hours ahead."
+    )
     
     args = parser.parse_args()
     
@@ -266,7 +288,8 @@ Examples:
             args.end,
             args.camera,
             args.output,
-            copy_codec=not args.reencode
+            copy_codec=not args.reencode,
+            timezone_offset_hours=args.timezone_offset
         )
     except Exception as e:
         print(f"Error: {e}", file=__import__("sys").stderr)

@@ -38,6 +38,7 @@ python compile_frigate_recording.py \
 - `--output` (required): Output MP4 filename
 - `--frigate-path` (optional): Path to Frigate storage (default: `/mnt/frigate`)
 - `--reencode` (optional): Re-encode video (slower but handles some codec issues)
+- `--timezone-offset` (optional): Hours to add to convert from your timezone to Frigate's timezone (default: 0). Use 2 if Frigate is 2 hours ahead of your local time.
 
 ## Examples
 
@@ -96,6 +97,18 @@ python compile_frigate_recording.py \
   --camera "EntreD340P" \
   --output output.mp4 \
   --reencode
+```
+
+### Handle timezone differences (Frigate 2 hours ahead)
+
+```bash
+python compile_frigate_recording.py \
+  --date 2026-04-28 \
+  --start 17:50 \
+  --end 18:10 \
+  --camera "Bryggers" \
+  --output bryggers_clip.mp4 \
+  --timezone-offset 2
 ```
 
 ## How It Works
